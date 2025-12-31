@@ -62,6 +62,7 @@ const usernameInput = document.getElementById("username-input");
 const continueBtn = document.getElementById("continue-btn");
 const readyBtn = document.getElementById("ready-btn");
 const statusLabel = document.getElementById("status-label");
+const restartBtn = document.getElementById("restart-btn");
 
 /*********************
  * Local storage

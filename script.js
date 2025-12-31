@@ -36,6 +36,7 @@ const playerName = localStorage.getItem(LOCAL_STORAGE_KEY);
  *********************/
 const playersRef = database.ref("playerName");
 const readyCountRef = database.ref("playersReadyToPlay");
+const impostorRef = database.ref("impostor");
 
 /*********************
  * Initial flow
@@ -60,8 +61,8 @@ continueBtn?.addEventListener("click", () => {
 
   localStorage.setItem(LOCAL_STORAGE_KEY, name);
 
-  // Register player
-  playersRef.child(name).set(true);
+  // Add player to list
+  playersRef.push(name);
 
   showNextScreen();
   setupReadyLogic();
@@ -73,7 +74,6 @@ continueBtn?.addEventListener("click", () => {
 function setupReadyLogic() {
   let hasClickedReady = false;
 
-  // Button initial state
   readyBtn.disabled = false;
   readyBtn.textContent = "I’m ready to play!";
 
@@ -84,29 +84,55 @@ function setupReadyLogic() {
     readyBtn.disabled = true;
     readyBtn.textContent = "Waiting for opponents…";
 
-    // Atomically increment counter
     readyCountRef.transaction(current => {
       return (current || 0) + 1;
     });
   });
 
-  // Listen for readiness updates
+  // Listen to game state
   database.ref().on("value", snapshot => {
     const data = snapshot.val();
-    if (!data) return;
+    if (!data || !data.playerName) return;
 
-    const totalPlayers = data.playerName
-      ? Object.keys(data.playerName).length
-      : 0;
-
+    const players = Object.values(data.playerName);
     const readyPlayers = data.playersReadyToPlay || 0;
 
-    if (totalPlayers > 0 && readyPlayers === totalPlayers) {
-      readyBtn.classList.add("hidden");
-      statusLabel.classList.remove("hidden");
-      statusLabel.textContent = "All users are ready to play";
+    // Everyone ready → assign impostor if not already done
+    if (readyPlayers === players.length && players.length > 0) {
+      assignImpostorIfNeeded(players);
+    }
+
+    // If impostor exists, reveal role
+    if (data.impostor) {
+      revealRole(data.impostor);
     }
   });
+}
+
+/*********************
+ * Impostor logic
+ *********************/
+function assignImpostorIfNeeded(players) {
+  impostorRef.once("value", snapshot => {
+    if (snapshot.exists()) return;
+
+    const randomIndex = Math.floor(Math.random() * players.length);
+    const impostor = players[randomIndex];
+
+    impostorRef.set(impostor);
+  });
+}
+
+function revealRole(impostor) {
+  readyBtn.classList.add("hidden");
+  statusLabel.classList.remove("hidden");
+
+  if (playerName === impostor) {
+    statusLabel.textContent =
+      "You are the impostor! Try and blend in with the group so you don’t get caught.";
+  } else {
+    statusLabel.textContent = "You are not the impostor!";
+  }
 }
 
 /*********************

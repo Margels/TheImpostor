@@ -46,3 +46,9 @@ button:disabled {
   cursor: not-allowed;
   color: #cccccc; /* lighter text when disabled */
 }
+
+#status-label {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+}

@@ -39,6 +39,16 @@ const readyCountRef = database.ref("playersReadyToPlay");
 const impostorRef = database.ref("impostor");
 
 /*********************
+ * GLOBAL impostor listener (VERY IMPORTANT)
+ *********************/
+impostorRef.on("value", snapshot => {
+  const impostor = snapshot.val();
+  if (!impostor || !playerName) return;
+
+  revealRole(impostor);
+});
+
+/*********************
  * Initial flow
  *********************/
 if (playerName) {
@@ -60,8 +70,6 @@ continueBtn?.addEventListener("click", () => {
   if (name.length <= 4) return;
 
   localStorage.setItem(LOCAL_STORAGE_KEY, name);
-
-  // Add player to Firebase list
   playersRef.push(name);
 
   showNextScreen();
@@ -77,20 +85,17 @@ function setupReadyLogic() {
   readyBtn.disabled = false;
   readyBtn.textContent = "I’m ready to play!";
 
-  readyBtn.addEventListener("click", () => {
+  readyBtn.onclick = () => {
     if (hasClickedReady) return;
 
     hasClickedReady = true;
     readyBtn.disabled = true;
     readyBtn.textContent = "Waiting for opponents…";
 
-    // Safely increment shared counter
-    readyCountRef.transaction(current => {
-      return (current || 0) + 1;
-    });
-  });
+    readyCountRef.transaction(current => (current || 0) + 1);
+  };
 
-  // 🔹 LISTENER 1: check when everyone is ready → assign impostor
+  // Watch game state
   database.ref().on("value", snapshot => {
     const data = snapshot.val();
     if (!data || !data.playerName) return;
@@ -98,21 +103,12 @@ function setupReadyLogic() {
     const players = Object.values(data.playerName);
     const readyPlayers = data.playersReadyToPlay || 0;
 
-    if (players.length > 0 && readyPlayers === players.length) {
+    // IMPORTANT: >= instead of === (race-safe)
+    if (players.length > 0 && readyPlayers >= players.length) {
       assignImpostorIfNeeded(players);
     }
   });
 }
-
-/*********************
- * 🔹 LISTENER 2: reveal impostor WHEN IT EXISTS
- *********************/
-impostorRef.on("value", snapshot => {
-  const impostor = snapshot.val();
-  if (!impostor) return;
-
-  revealRole(impostor);
-});
 
 /*********************
  * Impostor logic
@@ -122,9 +118,7 @@ function assignImpostorIfNeeded(players) {
     if (snapshot.exists()) return;
 
     const randomIndex = Math.floor(Math.random() * players.length);
-    const impostor = players[randomIndex];
-
-    impostorRef.set(impostor);
+    impostorRef.set(players[randomIndex]);
   });
 }
 

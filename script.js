@@ -4,7 +4,8 @@
 const firebaseConfig = {
   apiKey: "AIzaSyAn3oKc2zQ0uROHW_fFcQoI2sV1sg9FyFM",
   authDomain: "impostor-game-37a6b.firebaseapp.com",
-  databaseURL: "https://impostor-game-37a6b-default-rtdb.europe-west1.firebasedatabase.app",
+  databaseURL:
+    "https://impostor-game-37a6b-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "impostor-game-37a6b",
   storageBucket: "impostor-game-37a6b.firebasestorage.app",
   messagingSenderId: "863918769478",
@@ -25,7 +26,6 @@ const topics = [
   "🇬🇧 Mythological creatures 🇮🇹 Creature mitologiche",
   "🇬🇧 Winter clothing 🇮🇹 Abbigliamento invernale",
 
-  // harder / more abstract
   "🇬🇧 Things that can be folded 🇮🇹 Cose che si possono piegare",
   "🇬🇧 Things that make noise 🇮🇹 Cose che fanno rumore",
   "🇬🇧 Things that are transparent 🇮🇹 Cose trasparenti",
@@ -83,6 +83,7 @@ const topicRef = database.ref("topic");
  *********************/
 if (playerName) {
   showNextScreen();
+  setupReadyLogic();
   checkAfterReload();
 } else {
   usernameScreen.classList.remove("hidden");
@@ -107,51 +108,61 @@ continueBtn?.addEventListener("click", () => {
 });
 
 /*********************
- * Ready logic (phase 1)
+ * Ready logic
  *********************/
 function setupReadyLogic() {
-  readyBtn.textContent = "I’m ready to play!";
+  readyBtn.classList.remove("hidden");
   readyBtn.disabled = false;
+  readyBtn.textContent = "I’m ready to play!";
 
-  readyBtn.addEventListener("click", () => {
+  readyBtn.onclick = () => {
     readyBtn.disabled = true;
+    readyBtn.textContent = "Waiting for opponents…";
 
-    readyCountRef.transaction(current => (current || 0) + 1);
-
-    statusLabel.classList.remove("hidden");
-    statusLabel.textContent =
-      "Your future has been chosen! Reload the page to discover what the next game has in store for you…";
-
-    assignImpostorAndTopicWhenReady();
-  });
-}
-
-function assignImpostorAndTopicWhenReady() {
-  database.ref().once("value", snapshot => {
-    const data = snapshot.val();
-    if (!data || !data.playerName) return;
-
-    const players = Object.values(data.playerName);
-    const readyPlayers = data.playersReadyToPlay || 0;
-
-    if (readyPlayers === players.length) {
-      impostorRef.once("value", snap => {
-        if (!snap.exists()) {
-          const impostor =
-            players[Math.floor(Math.random() * players.length)];
-          impostorRef.set(impostor);
-
-          const topic =
-            topics[Math.floor(Math.random() * topics.length)];
-          topicRef.set(topic);
-        }
-      });
-    }
-  });
+    readyCountRef.transaction(current => {
+      return (current || 0) + 1;
+    });
+  };
 }
 
 /*********************
- * Phase 2 — after reload
+ * Global game listener
+ *********************/
+database.ref().on("value", snapshot => {
+  const data = snapshot.val();
+  if (!data || !data.playerName) return;
+
+  const players = Object.values(data.playerName);
+  const readyPlayers = data.playersReadyToPlay || 0;
+
+  // Everyone ready → assign impostor + topic once
+  if (
+    readyPlayers === players.length &&
+    players.length > 0 &&
+    !data.impostor
+  ) {
+    const impostor =
+      players[Math.floor(Math.random() * players.length)];
+    const topic =
+      topics[Math.floor(Math.random() * topics.length)];
+
+    database.ref().update({
+      impostor,
+      topic
+    });
+  }
+
+  // Game decided → ask users to reload
+  if (data.impostor && data.topic && readyBtn) {
+    readyBtn.classList.add("hidden");
+    statusLabel.classList.remove("hidden");
+    statusLabel.textContent =
+      "Your future has been chosen! Reload the page to discover what the next game has in store for you…";
+  }
+});
+
+/*********************
+ * After reload — reveal role
  *********************/
 function checkAfterReload() {
   database.ref().once("value", snapshot => {
@@ -177,17 +188,19 @@ function checkAfterReload() {
   });
 }
 
+/*********************
+ * Restart game (Martina only)
+ *********************/
 restartBtn?.addEventListener("click", () => {
-  const updates = {
+  database.ref().update({
     playersReadyToPlay: null,
-    topic: null,
-    impostor: null
-  };
-
-  database.ref().update(updates).then(() => {
+    impostor: null,
+    topic: null
+  }).then(() => {
     alert("Game restarted! Players can refresh to start again.");
     restartBtn.classList.add("hidden");
-    statusLabel.textContent = "Game reset. Waiting for players to get ready...";
+    statusLabel.textContent =
+      "Game reset. Waiting for players to get ready...";
   });
 });
 

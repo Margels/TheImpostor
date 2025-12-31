@@ -39,7 +39,6 @@ button {
   padding: 10px;
   font-size: 1rem;
   cursor: pointer;
-  color: #ffffff;
 }
 
 button:disabled {

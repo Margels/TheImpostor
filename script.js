@@ -32,11 +32,17 @@ const LOCAL_STORAGE_KEY = "playerName";
 const playerName = localStorage.getItem(LOCAL_STORAGE_KEY);
 
 /*********************
+ * Firebase refs
+ *********************/
+const playersRef = database.ref("playerName");
+const readyCountRef = database.ref("playersReadyToPlay");
+
+/*********************
  * Initial flow
  *********************/
 if (playerName) {
   showNextScreen();
-  setupReadyState();
+  setupReadyLogic();
 } else {
   usernameScreen.classList.remove("hidden");
 }
@@ -45,8 +51,7 @@ if (playerName) {
  * Username input
  *********************/
 usernameInput?.addEventListener("input", () => {
-  const value = usernameInput.value.trim();
-  continueBtn.disabled = value.length <= 4;
+  continueBtn.disabled = usernameInput.value.trim().length <= 4;
 });
 
 continueBtn?.addEventListener("click", () => {
@@ -55,54 +60,48 @@ continueBtn?.addEventListener("click", () => {
 
   localStorage.setItem(LOCAL_STORAGE_KEY, name);
 
-  const playerRef = database.ref(`playerName/${name}`);
-  playerRef.set({
-    readyToPlay: false
-  });
+  // Register player
+  playersRef.child(name).set(true);
 
   showNextScreen();
-  setupReadyState();
+  setupReadyLogic();
 });
 
 /*********************
  * Ready logic
  *********************/
-function setupReadyState() {
-  const playerRef = database.ref(`playerName/${playerName}`);
-  const allPlayersRef = database.ref("playerName");
+function setupReadyLogic() {
+  let hasClickedReady = false;
 
-  // Check if already ready
-  playerRef.once("value", snapshot => {
-    const data = snapshot.val();
+  // Button initial state
+  readyBtn.disabled = false;
+  readyBtn.textContent = "I’m ready to play!";
 
-    if (data?.readyToPlay === true) {
-      handleWaitingState();
-    } else {
-      readyBtn.disabled = false;
-      readyBtn.textContent = "I’m ready to play!";
-    }
-  });
-
-  // Click handler
   readyBtn.addEventListener("click", () => {
+    if (hasClickedReady) return;
+
+    hasClickedReady = true;
     readyBtn.disabled = true;
     readyBtn.textContent = "Waiting for opponents…";
 
-    playerRef.update({
-      readyToPlay: true
+    // Atomically increment counter
+    readyCountRef.transaction(current => {
+      return (current || 0) + 1;
     });
   });
 
-  // Listen for all players readiness
-  allPlayersRef.on("value", snapshot => {
-    const players = snapshot.val();
-    if (!players) return;
+  // Listen for readiness updates
+  database.ref().on("value", snapshot => {
+    const data = snapshot.val();
+    if (!data) return;
 
-    const allReady = Object.values(players).every(
-      player => player.readyToPlay === true
-    );
+    const totalPlayers = data.playerName
+      ? Object.keys(data.playerName).length
+      : 0;
 
-    if (allReady) {
+    const readyPlayers = data.playersReadyToPlay || 0;
+
+    if (totalPlayers > 0 && readyPlayers === totalPlayers) {
       readyBtn.classList.add("hidden");
       statusLabel.classList.remove("hidden");
       statusLabel.textContent = "All users are ready to play";
@@ -116,9 +115,4 @@ function setupReadyState() {
 function showNextScreen() {
   usernameScreen.classList.add("hidden");
   nextScreen.classList.remove("hidden");
-}
-
-function handleWaitingState() {
-  readyBtn.disabled = true;
-  readyBtn.textContent = "Waiting for opponents…";
 }

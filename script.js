@@ -15,13 +15,51 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
 /*********************
+ * Topics
+ *********************/
+const topics = [
+  "🇬🇧 Eye colours 🇮🇹 Colori degli occhi",
+  "🇬🇧 Sports equipment 🇮🇹 Attrezzatura sportiva",
+  "🇬🇧 Water animals 🇮🇹 Animali acquatici",
+  "🇬🇧 Pizza toppings 🇮🇹 Ingredienti da mettere sulla pizza",
+  "🇬🇧 Mythological creatures 🇮🇹 Creature mitologiche",
+  "🇬🇧 Winter clothing 🇮🇹 Abbigliamento invernale",
+
+  // harder / more abstract
+  "🇬🇧 Things that can be folded 🇮🇹 Cose che si possono piegare",
+  "🇬🇧 Things that make noise 🇮🇹 Cose che fanno rumore",
+  "🇬🇧 Things that are transparent 🇮🇹 Cose trasparenti",
+  "🇬🇧 Things found in a backpack 🇮🇹 Cose che si trovano in uno zaino",
+  "🇬🇧 Things that can break easily 🇮🇹 Cose che si rompono facilmente",
+  "🇬🇧 Circular objects 🇮🇹 Oggetti circolari",
+  "🇬🇧 Things that smell good 🇮🇹 Cose che profumano",
+  "🇬🇧 Things that float 🇮🇹 Cose che galleggiano",
+  "🇬🇧 Things associated with fear 🇮🇹 Cose associate alla paura",
+  "🇬🇧 Things that are soft 🇮🇹 Cose morbide",
+  "🇬🇧 Things used at night 🇮🇹 Cose usate di notte",
+  "🇬🇧 Things that are illegal in some countries 🇮🇹 Cose illegali in alcuni paesi",
+  "🇬🇧 Things that are sticky 🇮🇹 Cose appiccicose",
+  "🇬🇧 Things that require batteries 🇮🇹 Cose che funzionano a batterie",
+  "🇬🇧 Things found in a bathroom 🇮🇹 Cose che si trovano in bagno",
+  "🇬🇧 Things that melt 🇮🇹 Cose che si sciolgono",
+  "🇬🇧 Things associated with luxury 🇮🇹 Cose associate al lusso",
+  "🇬🇧 Things that move fast 🇮🇹 Cose che si muovono velocemente",
+  "🇬🇧 Things that are cold 🇮🇹 Cose fredde",
+  "🇬🇧 Things found at the airport 🇮🇹 Cose che si trovano in aeroporto",
+  "🇬🇧 Things that are addictive 🇮🇹 Cose che creano dipendenza",
+  "🇬🇧 Things that are red 🇮🇹 Cose rosse",
+  "🇬🇧 Things that are sharp 🇮🇹 Cose appuntite",
+  "🇬🇧 Things that make you sweat 🇮🇹 Cose che fanno sudare",
+  "🇬🇧 Things that are expensive to maintain 🇮🇹 Cose costose da mantenere"
+];
+
+/*********************
  * DOM references
  *********************/
 const usernameScreen = document.getElementById("username-screen");
 const nextScreen = document.getElementById("next-screen");
 const usernameInput = document.getElementById("username-input");
 const continueBtn = document.getElementById("continue-btn");
-
 const readyBtn = document.getElementById("ready-btn");
 const statusLabel = document.getElementById("status-label");
 
@@ -37,23 +75,14 @@ const playerName = localStorage.getItem(LOCAL_STORAGE_KEY);
 const playersRef = database.ref("playerName");
 const readyCountRef = database.ref("playersReadyToPlay");
 const impostorRef = database.ref("impostor");
-
-/*********************
- * GLOBAL impostor listener (VERY IMPORTANT)
- *********************/
-impostorRef.on("value", snapshot => {
-  const impostor = snapshot.val();
-  if (!impostor || !playerName) return;
-
-  revealRole(impostor);
-});
+const topicRef = database.ref("topic");
 
 /*********************
  * Initial flow
  *********************/
 if (playerName) {
   showNextScreen();
-  setupReadyLogic();
+  checkAfterReload();
 } else {
   usernameScreen.classList.remove("hidden");
 }
@@ -77,61 +106,69 @@ continueBtn?.addEventListener("click", () => {
 });
 
 /*********************
- * Ready logic
+ * Ready logic (phase 1)
  *********************/
 function setupReadyLogic() {
-  let hasClickedReady = false;
-
-  readyBtn.disabled = false;
   readyBtn.textContent = "I’m ready to play!";
+  readyBtn.disabled = false;
 
-  readyBtn.onclick = () => {
-    if (hasClickedReady) return;
-
-    hasClickedReady = true;
+  readyBtn.addEventListener("click", () => {
     readyBtn.disabled = true;
-    readyBtn.textContent = "Waiting for opponents…";
 
     readyCountRef.transaction(current => (current || 0) + 1);
-  };
 
-  // Watch game state
-  database.ref().on("value", snapshot => {
+    statusLabel.classList.remove("hidden");
+    statusLabel.textContent =
+      "Your future has been chosen! Reload the page to discover what the next game has in store for you…";
+
+    assignImpostorAndTopicWhenReady();
+  });
+}
+
+function assignImpostorAndTopicWhenReady() {
+  database.ref().once("value", snapshot => {
     const data = snapshot.val();
     if (!data || !data.playerName) return;
 
     const players = Object.values(data.playerName);
     const readyPlayers = data.playersReadyToPlay || 0;
 
-    // IMPORTANT: >= instead of === (race-safe)
-    if (players.length > 0 && readyPlayers >= players.length) {
-      assignImpostorIfNeeded(players);
+    if (readyPlayers === players.length) {
+      impostorRef.once("value", snap => {
+        if (!snap.exists()) {
+          const impostor =
+            players[Math.floor(Math.random() * players.length)];
+          impostorRef.set(impostor);
+
+          const topic =
+            topics[Math.floor(Math.random() * topics.length)];
+          topicRef.set(topic);
+        }
+      });
     }
   });
 }
 
 /*********************
- * Impostor logic
+ * Phase 2 — after reload
  *********************/
-function assignImpostorIfNeeded(players) {
-  impostorRef.once("value", snapshot => {
-    if (snapshot.exists()) return;
+function checkAfterReload() {
+  database.ref().once("value", snapshot => {
+    const data = snapshot.val();
+    if (!data || !data.impostor || !data.topic) return;
 
-    const randomIndex = Math.floor(Math.random() * players.length);
-    impostorRef.set(players[randomIndex]);
+    readyBtn.classList.add("hidden");
+    statusLabel.classList.remove("hidden");
+
+    if (playerName === data.impostor) {
+      statusLabel.textContent =
+        "You are the impostor! Try to blend in with the group and not get caught.";
+    } else {
+      statusLabel.textContent =
+        "You are not the impostor!\nThe topic for today will be:\n\n" +
+        data.topic;
+    }
   });
-}
-
-function revealRole(impostor) {
-  readyBtn.classList.add("hidden");
-  statusLabel.classList.remove("hidden");
-
-  if (playerName === impostor) {
-    statusLabel.textContent =
-      "You are the impostor! Try and blend in with the group so you don’t get caught.";
-  } else {
-    statusLabel.textContent = "You are not the impostor!";
-  }
 }
 
 /*********************

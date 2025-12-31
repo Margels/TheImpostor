@@ -61,7 +61,7 @@ continueBtn?.addEventListener("click", () => {
 
   localStorage.setItem(LOCAL_STORAGE_KEY, name);
 
-  // Add player to list
+  // Add player to Firebase list
   playersRef.push(name);
 
   showNextScreen();
@@ -84,12 +84,13 @@ function setupReadyLogic() {
     readyBtn.disabled = true;
     readyBtn.textContent = "Waiting for opponents…";
 
+    // Safely increment shared counter
     readyCountRef.transaction(current => {
       return (current || 0) + 1;
     });
   });
 
-  // Listen to game state
+  // 🔹 LISTENER 1: check when everyone is ready → assign impostor
   database.ref().on("value", snapshot => {
     const data = snapshot.val();
     if (!data || !data.playerName) return;
@@ -97,17 +98,21 @@ function setupReadyLogic() {
     const players = Object.values(data.playerName);
     const readyPlayers = data.playersReadyToPlay || 0;
 
-    // Everyone ready → assign impostor if not already done
-    if (readyPlayers === players.length && players.length > 0) {
+    if (players.length > 0 && readyPlayers === players.length) {
       assignImpostorIfNeeded(players);
-    }
-
-    // If impostor exists, reveal role
-    if (data.impostor) {
-      revealRole(data.impostor);
     }
   });
 }
+
+/*********************
+ * 🔹 LISTENER 2: reveal impostor WHEN IT EXISTS
+ *********************/
+impostorRef.on("value", snapshot => {
+  const impostor = snapshot.val();
+  if (!impostor) return;
+
+  revealRole(impostor);
+});
 
 /*********************
  * Impostor logic

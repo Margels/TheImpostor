@@ -169,6 +169,11 @@ function checkAfterReload() {
         "You are not the impostor!\nThe topic for today will be:\n\n" +
         data.topic;
     }
+
+    // 👑 Game master button
+    if (playerName === "Martina") {
+      restartBtn.classList.remove("hidden");
+    }
   });
 }
 

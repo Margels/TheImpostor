@@ -177,6 +177,20 @@ function checkAfterReload() {
   });
 }
 
+restartBtn?.addEventListener("click", () => {
+  const updates = {
+    playersReadyToPlay: null,
+    topic: null,
+    impostor: null
+  };
+
+  database.ref().update(updates).then(() => {
+    alert("Game restarted! Players can refresh to start again.");
+    restartBtn.classList.add("hidden");
+    statusLabel.textContent = "Game reset. Waiting for players to get ready...";
+  });
+});
+
 /*********************
  * UI helpers
  *********************/

@@ -22,49 +22,93 @@ const nextScreen = document.getElementById("next-screen");
 const usernameInput = document.getElementById("username-input");
 const continueBtn = document.getElementById("continue-btn");
 
-/*********************
- * Local storage key
- *********************/
-const LOCAL_STORAGE_KEY = "impostor_username";
+const readyBtn = document.getElementById("ready-btn");
+const statusLabel = document.getElementById("status-label");
 
 /*********************
- * Initial check
+ * Local storage
  *********************/
-const savedUsername = localStorage.getItem(LOCAL_STORAGE_KEY);
+const LOCAL_STORAGE_KEY = "playerName";
+const playerName = localStorage.getItem(LOCAL_STORAGE_KEY);
 
-if (savedUsername) {
-  // User already registered
+/*********************
+ * Initial flow
+ *********************/
+if (playerName) {
   showNextScreen();
+  setupReadyState();
 } else {
-  // Ask for username
   usernameScreen.classList.remove("hidden");
 }
 
 /*********************
- * Input validation
+ * Username input
  *********************/
-usernameInput.addEventListener("input", () => {
+usernameInput?.addEventListener("input", () => {
   const value = usernameInput.value.trim();
   continueBtn.disabled = value.length <= 4;
 });
 
-/*********************
- * Continue button
- *********************/
-continueBtn.addEventListener("click", () => {
-  const username = usernameInput.value.trim();
+continueBtn?.addEventListener("click", () => {
+  const name = usernameInput.value.trim();
+  if (name.length <= 4) return;
 
-  if (username.length <= 4) return;
+  localStorage.setItem(LOCAL_STORAGE_KEY, name);
 
-  // Save locally
-  localStorage.setItem(LOCAL_STORAGE_KEY, username);
-
-  // Save to Firebase
-  const playersRef = database.ref("playerNames");
-  playersRef.push(username);
+  const playerRef = database.ref(`playerName/${name}`);
+  playerRef.set({
+    readyToPlay: false
+  });
 
   showNextScreen();
+  setupReadyState();
 });
+
+/*********************
+ * Ready logic
+ *********************/
+function setupReadyState() {
+  const playerRef = database.ref(`playerName/${playerName}`);
+  const allPlayersRef = database.ref("playerName");
+
+  // Check if already ready
+  playerRef.once("value", snapshot => {
+    const data = snapshot.val();
+
+    if (data?.readyToPlay === true) {
+      handleWaitingState();
+    } else {
+      readyBtn.disabled = false;
+      readyBtn.textContent = "I’m ready to play!";
+    }
+  });
+
+  // Click handler
+  readyBtn.addEventListener("click", () => {
+    readyBtn.disabled = true;
+    readyBtn.textContent = "Waiting for opponents…";
+
+    playerRef.update({
+      readyToPlay: true
+    });
+  });
+
+  // Listen for all players readiness
+  allPlayersRef.on("value", snapshot => {
+    const players = snapshot.val();
+    if (!players) return;
+
+    const allReady = Object.values(players).every(
+      player => player.readyToPlay === true
+    );
+
+    if (allReady) {
+      readyBtn.classList.add("hidden");
+      statusLabel.classList.remove("hidden");
+      statusLabel.textContent = "All users are ready to play";
+    }
+  });
+}
 
 /*********************
  * UI helpers
@@ -72,4 +116,9 @@ continueBtn.addEventListener("click", () => {
 function showNextScreen() {
   usernameScreen.classList.add("hidden");
   nextScreen.classList.remove("hidden");
+}
+
+function handleWaitingState() {
+  readyBtn.disabled = true;
+  readyBtn.textContent = "Waiting for opponents…";
 }
